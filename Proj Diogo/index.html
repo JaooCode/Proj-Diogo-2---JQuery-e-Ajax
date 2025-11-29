@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+<!-- Link com CSS -->
+
+    <link rel=stylesheet href="style/style.css">
+
+<!-- Link com Jquery-->
+    <script
+  src="https://code.jquery.com/jquery-3.7.1.min.js"
+  integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+  crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <!-- Título da página -->
+
+
+    <div class="titlecard">
+        <header>
+    <h1>Aluguel de Vehículos</h1>
+    <p>Bem-Vindo ao site de aluguel de vehículos!</p>
+        </header>
+    </div>
+
+
+
+    <!-- Formulário de locais para alugar -->
+
+
+  <main>
+    <!-- Painel de pesquisa / filtros -->
+    <div role="search">
+      <input id="q" type="search" placeholder="Pesquisar por modelo, marca, cidade..." aria-label="Pesquisar">
+      <select id="category"><option value="">Todos os tipos</option><option>Compacto</option><option>SUV</option><option>Van</option><option>Executivo</option></select>
+      <input id="dateStart" type="date" aria-label="Data início">
+      <input id="dateEnd" type="date" aria-label="Data fim">
+      <button id="btnSearch">Buscar</button>
+    </div>
+
+    <!-- Resultados / lista de veículos -->
+    <section>
+      <h2>Veículos disponíveis</h2>
+      <div id="vehiclesGrid">
+        <!-- Cards serão preenchidos via jQuery + AJAX -->
+      </div>
+
+      <div id="noResults" style="display:none">Nenhum veículo encontrado. Tente alterar os filtros.</div>
+    </section>
+  </main>
+
+   <!-- Modal de reserva -->
+  <div id="modalBackdrop" role="dialog" aria-hidden="true">
+    <div>
+      <header>
+        <h3 id="modalTitle">Reservar veículo</h3>
+        <button id="closeModal" aria-label="Fechar">✕</button>
+      </header>
+      <div>
+        <form id="bookingForm">
+          <input type="hidden" id="vehicleId" name="vehicleId">
+          <label>Nome completo<input name="name" id="bookName" required placeholder="Seu nome"></label>
+          <div>
+            <label>Telefone<input name="phone" id="bookPhone" required placeholder="(DDD) 9xxxx-xxxx"></label>
+            <label>E-mail<input name="email" id="bookEmail" type="email" placeholder="seu@email.com"></label>
+          </div>
+          <div>
+            <label>Data início<input id="bookStart" name="start" type="date" required></label>
+            <label>Data fim<input id="bookEnd" name="end" type="date" required></label>
+          </div>
+          <div>
+            <button type="button" id="cancelBook">Cancelar</button>
+            <button type="submit">Confirmar reserva</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+   <!-- jQuery + Script de integração AJAX (exemplos) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script>
+    // Configurações iniciais: altere os endpoints para o seu backend
+    const API = {
+      list: '/api/vehicles',        // GET ?q=&category=&start=&end=
+      book: '/api/book'             // POST { vehicleId, name, phone, email, start, end }
+    };
+
+    function formatMoney(value){
+      return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(value);
+    }
+
+    function loadVehicles(filters = {}){
+      const grid = document.getElementById('vehiclesGrid');
+      grid.innerHTML = 'Carregando...';
+
+      $.ajax({
+        url: API.list,
+        method: 'GET',
+        data: filters,
+        dataType: 'json',
+        success(res){
+          grid.innerHTML = '';
+          if(!res || !res.length){
+            document.getElementById('noResults').style.display = 'block';
+            return;
+          }
+          res.forEach(vehicle => {
+            const article = document.createElement('article');
+            const img = document.createElement('img');
+            img.src = vehicle.image || 'https://via.placeholder.com/640x360?text=Veículo';
+            img.alt = vehicle.model || '';
+            const h3 = document.createElement('h3');
+            h3.textContent = vehicle.brand + ' ' + vehicle.model;
+            const meta = document.createElement('div');
+            meta.textContent = (vehicle.category || '—') + ' • ' + (vehicle.city || 'Cidade');
+            const price = document.createElement('div');
+            price.textContent = formatMoney(vehicle.pricePerDay) + ' / dia';
+            const actions = document.createElement('div');
+            const btnBook = document.createElement('button');
+            btnBook.textContent = 'Reservar';
+            btnBook.dataset.id = vehicle.id;
+            btnBook.addEventListener('click', () => openBookingModal(vehicle.id));
+            const btnDetails = document.createElement('button');
+            btnDetails.textContent = 'Detalhes';
+
+            actions.appendChild(btnBook);
+            actions.appendChild(btnDetails);
+
+            article.appendChild(img);
+            article.appendChild(h3);
+            article.appendChild(meta);
+            article.appendChild(price);
+            article.appendChild(actions);
+
+            grid.appendChild(article);
+          });
+        },
+        error(err){
+          grid.innerHTML = 'Erro ao carregar veículos';
+          console.error('Erro listagem veículos', err);
+        }
+      });
+    }
+
+    function applySearch(){
+      const q = document.getElementById('q').value;
+      const category = document.getElementById('category').value;
+      const start = document.getElementById('dateStart').value;
+      const end = document.getElementById('dateEnd').value;
+      loadVehicles({q, category, start, end});
+    }
+
+    function openBookingModal(vehicleId){
+      document.getElementById('vehicleId').value = vehicleId;
+      document.getElementById('modalBackdrop').setAttribute('aria-hidden','false');
+    }
+
+    function closeModal(){
+      document.getElementById('modalBackdrop').setAttribute('aria-hidden','true');
+      document.getElementById('bookingForm').reset();
+    }
+
+    function submitBooking(data){
+      return $.ajax({
+        url: API.book,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        dataType: 'json'
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      document.getElementById('year').textContent = new Date().getFullYear();
+      loadVehicles();
+      document.getElementById('btnSearch').addEventListener('click', applySearch);
+      document.getElementById('q').addEventListener('keyup', function(e){ if(e.key === 'Enter') applySearch(); });
+      document.getElementById('closeModal').addEventListener('click', closeModal);
+      document.getElementById('cancelBook').addEventListener('click', closeModal);
+
+      document.getElementById('bookingForm').addEventListener('submit', function(e){
+        e.preventDefault();
+        const payload = {
+          vehicleId: document.getElementById('vehicleId').value,
+          name: document.getElementById('bookName').value,
+          phone: document.getElementById('bookPhone').value,
+          email: document.getElementById('bookEmail').value,
+          start: document.getElementById('bookStart').value,
+          end: document.getElementById('bookEnd').value
+        };
+        if(!payload.start || !payload.end){ alert('Informe período da reserva'); return; }
+        submitBooking(payload).done((resp) => {
+          alert('Reserva confirmada! Código: ' + (resp.code || '—'));
+          closeModal();
+          loadVehicles();
+        }).fail((xhr) => {
+          const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao tentar reservar';
+          alert(msg);
+        });
+      });
+    });
+  </script>
+
+  <!-- Notas:
+    - Troque os endpoints em API.list e API.book para os seus endpoints reais.
+    - API.list deve retornar um array JSON com objetos: { id, brand, model, category, city, pricePerDay, image }
+    - API.book espera um POST JSON com os campos do payload; retorne status adequado e, preferencialmente, { code: 'ABC123' }
+  -->
+
+  
+    <br> <br> <br> <br>
+  
+    <!--Carrossel de Imagens (Adoro fazer isso)-->
+    <div class="ofertas">
+    <img src="" class="ativo" alt="slide1">
+    <img src="" alt="slide2">
+    <img src="" alt="slide3">
+
+      
+    </div>
+  
+
+</body>
+</html>
